@@ -1,0 +1,215 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LossTracker</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 18px;
+      font-family: Arial, sans-serif;
+      background: #101827;
+      color: #f1f5f9;
+    }
+    header { margin-bottom: 22px; }
+    h1 { margin-bottom: 6px; color: #7dd3fc; }
+    .muted { color: #aab8ca; font-size: 14px; }
+    .panel {
+      background: #1c293b;
+      border: 1px solid #34445b;
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 8px;
+      border-radius: 8px;
+      border: 1px solid #52647c;
+      font-size: 15px;
+    }
+    input, select { background: #101827; color: white; }
+    button {
+      background: #38bdf8;
+      color: #082f49;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .stat {
+      background: #101827;
+      padding: 12px;
+      border-radius: 10px;
+    }
+    .value { font-size: 20px; font-weight: bold; margin-top: 8px; }
+    .gain { color: #4ade80; }
+    .loss { color: #fb7185; }
+    .company {
+      border-top: 1px solid #34445b;
+      padding: 14px 0;
+    }
+    .company:first-child { border-top: none; }
+    .company-title { font-weight: bold; font-size: 17px; }
+    .small-button { margin-top: 8px; padding: 8px; }
+    footer { color: #aab8ca; font-size: 12px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📊 LossTracker</h1>
+    <div class="muted">Company performance monitoring dashboard</div>
+  </header>
+
+  <section class="panel">
+    <h3>Market overview</h3>
+    <div class="stats">
+      <div class="stat">
+        <div class="muted">Companies tracked</div>
+        <div class="value" id="count">0</div>
+      </div>
+      <div class="stat">
+        <div class="muted">Gaining / Losing</div>
+        <div class="value" id="movement">0 / 0</div>
+      </div>
+    </div>
+    <p class="muted">Price changes are not your personal earnings.</p>
+  </section>
+
+  <section class="panel">
+    <h3>Add a company</h3>
+    <form id="companyForm">
+      <input id="name" placeholder="Company name" required>
+      <input id="market" placeholder="Market (e.g. NSE, NASDAQ)" required>
+      <input id="previous" type="number" min="0" step="any"
+        placeholder="Previous closing price (₹ or local currency)" required>
+      <input id="latest" type="number" min="0" step="any"
+        placeholder="Latest price in the same currency" required>
+      <button type="submit">Add company</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h3>Your watchlist</h3>
+    <div id="list" class="muted">No companies added yet.</div>
+  </section>
+
+  <footer>
+    LossTracker prototype · Prices are entered manually and are not live.
+    This dashboard does not execute trades or generate payments.
+    Data is saved in this browser on this device.
+  </footer>
+
+  <script>
+    const storageKey = "losstracker-companies-v1";
+    let companies = [];
+
+    try {
+      companies = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      if (!Array.isArray(companies)) companies = [];
+    } catch (error) {
+      companies = [];
+    }
+
+    const money = value => Number(value).toLocaleString(undefined, {
+      maximumFractionDigits: 4
+    });
+
+    function save() {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(companies));
+      } catch (error) {
+        alert("Could not save data in this browser.");
+      }
+      render();
+    }
+
+    function render() {
+      document.getElementById("count").textContent = companies.length;
+
+      const gaining = companies.filter(c => c.latest > c.previous).length;
+      const losing = companies.filter(c => c.latest < c.previous).length;
+      document.getElementById("movement").textContent =
+        gaining + " / " + losing;
+
+      const list = document.getElementById("list");
+      list.className = "";
+      list.replaceChildren();
+
+      if (companies.length === 0) {
+        list.textContent = "No companies added yet.";
+        list.className = "muted";
+        return;
+      }
+
+      companies.forEach((company, index) => {
+        const change = company.latest - company.previous;
+        const percent = company.previous > 0
+          ? change / company.previous * 100
+          : null;
+        const positive = change > 0;
+        const negative = change < 0;
+
+        const card = document.createElement("div");
+        card.className = "company";
+
+        const title = document.createElement("div");
+        title.className = "company-title";
+        title.textContent = company.name + " · " + company.market;
+
+        const prices = document.createElement("p");
+        prices.textContent = "Previous: " + money(company.previous) +
+          " | Latest: " + money(company.latest);
+
+        const result = document.createElement("div");
+        result.className = "value " +
+          (positive ? "gain" : negative ? "loss" : "");
+        result.textContent = (change > 0 ? "+" : "") + money(change) +
+          (percent === null ? "" : " (" +
+          (percent > 0 ? "+" : "") + percent.toFixed(2) + "%)");
+
+        const remove = document.createElement("button");
+        remove.className = "small-button";
+        remove.textContent = "Remove";
+        remove.type = "button";
+        remove.addEventListener("click", () => {
+          companies.splice(index, 1);
+          save();
+        });
+
+        card.append(title, prices, result, remove);
+        list.appendChild(card);
+      });
+    }
+
+    document.getElementById("companyForm").addEventListener("submit", event => {
+      event.preventDefault();
+
+      const name = document.getElementById("name").value.trim();
+      const market = document.getElementById("market").value.trim();
+      const previous = Number(document.getElementById("previous").value);
+      const latest = Number(document.getElementById("latest").value);
+
+      if (!name || !market || !Number.isFinite(previous) ||
+          !Number.isFinite(latest) || previous < 0 || latest < 0) {
+        alert("Enter a company, market and valid non-negative prices.");
+        return;
+      }
+
+      companies.push({ name, market, previous, latest });
+      save();
+      event.target.reset();
+    });
+
+    render();
+  </script>
+</body>
+</html>
